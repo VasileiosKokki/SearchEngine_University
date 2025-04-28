@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Query Search</title>
+    <script>
+        async function searchQuery() {
+            // Get the value of the query input field
+            const query = document.getElementById('query').value;
+
+            // Send GET request to the server
+            const response = await fetch(`/search?query=${encodeURIComponent(query)}`);
+
+            // Parse the JSON response
+            const data = await response.json();
+
+            // Display results in the result div
+            document.getElementById('result').innerHTML = JSON.stringify(data, null, 2);
+        }
+    </script>
+</head>
+<body>
+<h1>Search Documents</h1>
+
+<!-- Input for entering query -->
+<label for="query">Enter your query:</label>
+<input type="text" id="query" name="query" required />
+
+<!-- Button to trigger search -->
+<button onclick="searchQuery()">Search</button>
+
+<!-- Container to display search results -->
+<div id="result" style="margin-top: 20px; white-space: pre-wrap;"></div>
+</body>
+</html>

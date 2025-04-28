@@ -18,7 +18,7 @@ def load_docs_to_dict(ids_list, file_path_docs):
 
             # Assuming the ID is the first field, title is third and abstract is the fourth field
             doc_id = fields[0].strip()
-            title =  fields[2].strip()
+            title = fields[2].strip()
             abstract = fields[3].strip()
 
             # If the doc_id is in the ids_list, add it to the dictionary
@@ -26,6 +26,30 @@ def load_docs_to_dict(ids_list, file_path_docs):
                 docs[doc_id] = title+" "+ abstract
 
     return docs
+
+def load_all_docs_metadata(file_path_docs):
+    docs_metadata = {}
+
+    # Open and read the file
+    with open(file_path_docs, 'r', encoding='utf-8') as f:
+        for line in f:
+            # Split each line by tab
+            fields = line.strip().split('\t')
+
+            # Assuming the ID is the first field, URL is the second, title is the third, and abstract is the fourth
+            doc_id = fields[0].strip()
+            url = fields[1].strip()
+            title = fields[2].strip()
+            abstract = fields[3].strip()
+
+            # Store the metadata in a dictionary
+            docs_metadata[doc_id] = {
+                'url': url,
+                'title': title,
+                'abstract': abstract
+            }
+
+    return docs_metadata
 
 
 # def tokenize(text, pattern, stopwords, stemmer):
