@@ -6,31 +6,99 @@
     <title>Query Search</title>
     <script>
         async function searchQuery() {
-            // Get the value of the query input field
             const query = document.getElementById('query').value;
-
-            // Send GET request to the server
-            const response = await fetch(`/search?query=${encodeURIComponent(query)}`);
-
-            // Parse the JSON response
+            const searchBy = document.getElementById('searchBy').value;
+            const useSemanticSearch = document.getElementById('useSemanticSearch').value === 'true';
+            const response = await fetch(`/search?query=${encodeURIComponent(query)}&searchBy=${encodeURIComponent(searchBy)}&useSemanticSearch=${encodeURIComponent(useSemanticSearch)}`);
             const data = await response.json();
 
-            // Display results in the result div
-            document.getElementById('result').innerHTML = JSON.stringify(data, null, 2);
+            // Clear previous results
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '';
+
+            // Format and insert each result
+            data.results.forEach(result => {
+                const container = document.createElement('div');
+                container.style.backgroundColor = '#1e1e1e';
+                container.style.padding = '16px';
+                container.style.marginBottom = '16px';
+                container.style.borderRadius = '8px';
+                container.style.color = '#ccc';
+                container.style.fontFamily = 'sans-serif';
+                container.style.maxWidth = '700px';
+
+                const titleLink = document.createElement('a');
+                titleLink.href = result.url;
+                titleLink.textContent = `${result.title} (${result.release_year})`;
+                titleLink.target = '_blank';
+                titleLink.style.color = '#4fc3f7';
+                titleLink.style.fontSize = '18px';
+                titleLink.style.textDecoration = 'none';
+
+                const desc = document.createElement('p');
+                desc.innerHTML = `
+                    ${result.plot}<br/>
+                    <strong>Origin:</strong> ${result.origin}<br/>
+                    <strong>Director:</strong> ${result.director}<br/>
+                    <strong>Cast:</strong> ${result.cast}<br/>
+                    <strong>Genre:</strong> ${result.genre}
+                `;
+                desc.style.marginTop = '8px';
+
+                container.appendChild(titleLink);
+                container.appendChild(desc);
+                resultDiv.appendChild(container);
+            });
+
+            document.getElementById('time_needed').textContent = `(${data.time_needed.toFixed(3)}s)`;
+        }
+
+        function truncatePlot(text, maxLength = 300) {
+            return text.length > maxLength
+                ? text.slice(0, maxLength).trim() + '...'
+                : text;
         }
     </script>
 </head>
-<body>
-<h1>Search Documents</h1>
+<body style="background-color: #121212; color: #ccc; font-family: sans-serif; margin: 0; padding: 32px;  min-height: calc(100vh - 64px);">
+<div style="margin-left: 10vw; margin-right: auto;">
 
-<!-- Input for entering query -->
-<label for="query">Enter your query:</label>
-<input type="text" id="query" name="query" required />
+    <h1 style="color: #fff;">Wikipedia Movie Plots</h1>
 
-<!-- Button to trigger search -->
-<button onclick="searchQuery()">Search</button>
+    <!-- Input label -->
+    <label for="query">Search movies:</label>
 
-<!-- Container to display search results -->
-<div id="result" style="margin-top: 20px; white-space: pre-wrap;"></div>
+    <!-- Wrap search bar + span in a fixed-width container -->
+    <div style="display: flex; align-items: center; gap: 8px; margin: 8px 0;">
+        <div style="width: 700px; display: flex; gap: 8px; align-items: center; flex-wrap: nowrap;">
+            <input type="text" id="query" name="query" required
+                   style="padding: 8px; flex: 1 1 0; min-width: 100px;" />
+
+            <select id="searchBy" style="padding: 8px;">
+                <option value="plot">Plot</option>
+                <option value="title">Title</option>
+                <option value="origin">Origin</option>
+                <option value="director">Director</option>
+                <option value="cast">Cast</option>
+                <option value="genre">Genre</option>
+                <option value="evaluation">Evaluation</option>
+            </select>
+
+            <select id="useSemanticSearch" style="padding: 8px;">
+                <option value="true">Semantic-Based</option>
+                <option value="false">Keyword-Based</option>
+            </select>
+
+            <button onclick="searchQuery()" style="padding: 8px 16px;">Search</button>
+        </div>
+
+        <!-- Span right next to bar without shrinking it -->
+        <span id="time_needed" style="color: #888; font-size: 14px; white-space: nowrap;"></span>
+    </div>
+
+    <!-- Results -->
+    <div id="result" style="margin-top: 32px;"></div>
+</div>
+
 </body>
 </html>
