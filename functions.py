@@ -136,7 +136,7 @@ def get_top10_results_per_query(queries, doc_ids, model_name,
         for q_id, (q_text, ranked_docs) in ranked_results.items():
             print(q_id, q_text, ranked_docs)
 
-    print(f"Total time for all queries: {total_time:.3f} seconds\n")
+    print(f"Total time for all queries for model {model_name} : {total_time:.3f} seconds\n")
 
     return ranked_results
 
@@ -269,8 +269,6 @@ def semantic_similarity(doc_ids, q_text, embeddings, model):
 
 def evaluate_topk_results(golden_answers, topk_results, model_name):
     total_precision = 0
-    total_recall = 0
-    total_f1 = 0
     num_queries = len(golden_answers)
 
     for qid in golden_answers:
@@ -281,26 +279,17 @@ def evaluate_topk_results(golden_answers, topk_results, model_name):
         # Compute TP, FP, FN
         tp = len(correct_set & retrieved_set)
         fp = len(retrieved_set - correct_set)
-        fn = len(correct_set - retrieved_set)
 
         # Compute Precision, Recall, F1
         precision = tp / (tp + fp) if (tp + fp) > 0 else 0
-        recall = tp / (tp + fn) if (tp + fn) > 0 else 0
-        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
 
         total_precision += precision
-        total_recall += recall
-        total_f1 += f1
 
     # Compute means
     mean_precision = total_precision / num_queries
-    mean_recall = total_recall / num_queries
-    mean_f1 = total_f1 / num_queries
 
     # Output results
     print(f"Model: {model_name}")
-    print(f"Mean Precision: {mean_precision:.4f}")
-    print(f"Mean Recall: {mean_recall:.4f}")
-    print(f"Mean F1 Score: {mean_f1:.4f}\n")
+    print(f"Mean Precision: {mean_precision:.4f}\n")
 
-    return mean_precision, mean_recall, mean_f1
+    return mean_precision

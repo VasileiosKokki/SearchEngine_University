@@ -8,7 +8,13 @@ def startup():
 
     stopwords = load_stopwords()
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    if torch.cuda.is_available():
+        device = "cuda"
+    elif torch.backends.mps.is_available() and torch.backends.mps.is_built():
+        device = "mps"
+    else:
+        device = "cpu"
+
     print(f"Using device: {device}")
     model_name = "all-MiniLM-L6-v2"
     model = SentenceTransformer(model_name, device=device)
@@ -41,9 +47,6 @@ def startup():
             q_text = line.strip()
             queries[q_id] = q_text
 
-    # ---------- 2) Implement an indexing mechanism ----------
-
-    # trie = build_trie_index(tfidf_representation)
 
     # ---------- 3) Implement the mechanism for retrieving and calibrating the results ----------
 
