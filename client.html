@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Query Search</title>
+    <style>
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+    <script>
+        let docsWithMeta = [];
+        let searchVersion = 0;
+
+        async function search() {
+            const start = performance.now();
+            ++searchVersion; // Increment to mark this as a new version
+
+            const query = document.getElementById('query').value;
+            const field = document.getElementById('searchBy').value;
+
+            const useSemanticSearch = document.getElementById('useSemanticSearch').value === 'true';
+
+            try {
+                const response = await fetch(`/search?query=${encodeURIComponent(query)}&field=${encodeURIComponent(field)}&useSemanticSearch=${encodeURIComponent(useSemanticSearch)}`);
+                if (!response.ok) {
+                    throw new Error(`Server responded with status ${response.status}`);
+                }
+
+                const data = await response.json();
+                docsWithMeta = data.results;
+
+                const end = performance.now();
+                const timeTaken = (end - start) / 1000;
+
+                renderDocsWithMeta();
+                document.getElementById('time_needed').textContent = `(${timeTaken.toFixed(3)}s)`;
+
+                const judgeButton = document.querySelector('button[onclick="judgeDocs()"]');
+                const buttonText = document.getElementById('button-text');
+                const spinner = document.getElementById('loading-spinner');
+                judgeButton.disabled = false;
+                buttonText.style.display = "inline-block";  // Show the "Judge" text
+                spinner.style.display = "none";  // Hide the spinner
+
+            } catch (error) {
+                console.error("Search failed:", error);
+                alert("Something went wrong while searching. Please try again.");
+            }
+        }
+
+        async function judgeDocs() {
+            const start = performance.now();
+            const judgeButton = document.querySelector('button[onclick="judgeDocs()"]');
+            const buttonText = document.getElementById('button-text');
+            const spinner = document.getElementById('loading-spinner');
+            const currentVersion = searchVersion;
+            const query = document.getElementById('query').value;
+            const field = document.getElementById('searchBy').value;
+
+            if (!docsWithMeta.length) {
+                console.warn('No documents to judge. Please perform a search first.');
+                return;
+            }
+
+            judgeButton.disabled = true;
+            buttonText.style.display = "none";  // Hide the "Judge" text
+            spinner.style.display = "inline-block";  // Show the spinner
+
+            const payload = {
+                query: query,
+                docs_with_eval_meta: docsWithMeta.map(doc => ({
+                    doc_id: doc.doc_id,
+                    evaluation: doc[field]
+                }))
+            };
+
+            try {
+                const response = await fetch('/judge', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                // Ignore if new search happened after this judge request
+                if (currentVersion !== searchVersion) {
+                    console.warn('Outdated judge result discarded due to new search.');
+                    return;
+                }
+
+                const relevanceArray = result || [];
+
+                const relevanceMap = {};
+                relevanceArray.forEach(entry => {
+                    relevanceMap[entry.doc_id] = entry.relevant === 'yes';
+                });
+                docsWithMeta.forEach(doc => {
+                    doc._isRelevant = relevanceMap[doc.doc_id] === true;
+                });
+
+                console.log(result)
+                console.log(relevanceMap)
+                renderDocsWithMeta();
+
+                const end = performance.now();
+                document.getElementById('time_needed').textContent = `(${((end - start) / 1000).toFixed(3)}s)`;
+            } catch (error) {
+                console.error('Judging request failed:', error);
+            } finally {
+                judgeButton.disabled = false;
+                buttonText.style.display = "inline-block";  // Show the "Judge" text
+                spinner.style.display = "none";  // Hide the spinner
+            }
+        }
+
+        function renderDocsWithMeta() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '';
+
+            docsWithMeta.forEach(result => {
+                const container = document.createElement('div');
+                container.style.backgroundColor = result._isRelevant === true
+                    ? 'rgba(0, 255, 0, 0.1)' // green
+                    : result._isRelevant === false
+                        ? 'rgba(255, 0, 0, 0.1)' // red
+                        : '#1e1e1e'; // default
+
+                container.style.padding = '16px';
+                container.style.marginBottom = '16px';
+                container.style.borderRadius = '8px';
+                container.style.color = '#ccc';
+                container.style.fontFamily = 'sans-serif';
+                container.style.maxWidth = '700px';
+
+                const titleLink = document.createElement('a');
+                titleLink.href = result.url;
+                titleLink.textContent = `${result.title} (${result.release_year})`;
+                titleLink.target = '_blank';
+                titleLink.style.color = '#4fc3f7';
+                titleLink.style.fontSize = '18px';
+                titleLink.style.textDecoration = 'none';
+
+                const desc = document.createElement('p');
+                desc.innerHTML = `
+                ${truncatePlot(result.plot)}<br/>
+                <strong>Origin:</strong> ${result.origin}<br/>
+                <strong>Director:</strong> ${result.director}<br/>
+                <strong>Cast:</strong> ${result.cast}<br/>
+                <strong>Genre:</strong> ${result.genre}
+            `;
+                desc.style.marginTop = '8px';
+
+                container.appendChild(titleLink);
+                container.appendChild(desc);
+                resultDiv.appendChild(container);
+            });
+        }
+
+        function truncatePlot(text, maxLength = 300) {
+            return text.length > maxLength
+                ? text.slice(0, maxLength).trim() + '...'
+                : text;
+        }
+    </script>
+
+</head>
+<body style="background-color: #121212; color: #ccc; font-family: sans-serif; margin: 0; padding: 32px;  min-height: calc(100vh - 64px);">
+<div style="margin-left: 10vw; margin-right: auto;">
+
+    <h1 style="color: #fff;">Tenies Online </h1>
+
+    <!-- Input label -->
+    <label for="query">Search movies:</label>
+
+    <!-- Wrap search bar + span in a fixed-width container -->
+    <div style="display: flex; align-items: center; gap: 8px; margin: 8px 0;">
+        <div style="width: 700px; display: flex; gap: 8px; align-items: center; flex-wrap: nowrap;">
+
+            <input type="text" id="query" name="query" required
+                   style="padding: 8px; flex: 1 1 0; min-width: 100px; background-color: #333; color: white; border: none;" />
+
+            <select id="searchBy" style="padding: 8px; background-color: #333; color: white; border: none;">
+                <option value="plot">Plot</option>
+                <option value="title">Title</option>
+                <option value="origin">Origin</option>
+                <option value="director">Director</option>
+                <option value="cast">Cast</option>
+                <option value="genre">Genre</option>
+                <option value="evaluation">Evaluation</option>
+            </select>
+
+            <select id="useSemanticSearch" style="padding: 8px; background-color: #333; color: white; border: none;">
+                <option value="true">Semantic Based</option>
+                <option value="false">Keyword Based</option>
+            </select>
+
+            <button onclick="search()" style="padding: 8px 16px; background-color: #888; color: white; border: none; cursor: pointer;">
+                Search
+            </button>
+
+            <button id="judge-button" onclick="judgeDocs()" style="padding: 8px 16px; background-color: #888; color: white; border: none; display: inline-flex; align-items: center; cursor: pointer;">
+                <span id="button-text">Judge</span>
+                <span id="loading-spinner" class="spinner" style="display: none;"></span>
+            </button>
+        </div>
+        <!-- Span right next to bar without shrinking it -->
+        <span id="time_needed" style="color: #888; font-size: 14px; white-space: nowrap;"></span>
+    </div>
+
+    <!-- Results -->
+    <div id="result" style="margin-top: 32px;"></div>
+</div>
+
+</body>
+</html>

@@ -1,27 +1,27 @@
-# server.py
 import time
 
+import pandas as pd
 from flask import Flask, request, jsonify, send_from_directory
 
-from functions import load_all_docs_metadata, bm25, semantic_similarity
+from helper_funcs.judge_and_golden_answers import judge_single_query
 from main import startup
+from models.bm25 import tokenized_similarity
+from models.sentence_transformer import semantic_similarity
 
 app = Flask(__name__)
 
 with app.app_context():
-    # vectorizer, tfidf_representation, trie, vocabulary = startup()  # Call the startup function to initialize the global variables
-    corpus_index, idf_values, doc_ids, stopwords, avgdl, sentence_embeddings, transformer_model, docs_metadata = startup()
+    corpus_index, idf_values, doc_ids, stopwords, avgdl, sentence_embeddings, transformer_model, docs_metadata, api_key, faiss_indexes = startup()
     print("Flask app startup complete.")  # Debugging line to confirm the startup
 
 
 @app.route('/')
 def home():
-    return send_from_directory(".", "index.html")
+    return send_from_directory(".", "client.html")
 @app.route('/search', methods=['GET'])
 def search():
-    start_time = time.time()  # Start timing
     user_query = request.args.get('query')  # Get ?query= from URL
-    search_by = request.args.get('searchBy')
+    field = request.args.get('field')
     use_semantic_search = request.args.get('useSemanticSearch') == 'true'
 
     if not user_query:
@@ -29,35 +29,42 @@ def search():
 
     # Tokenize the query
     if use_semantic_search:
-        scores = semantic_similarity(doc_ids, user_query, sentence_embeddings[search_by], transformer_model)
+        ranked_docs = semantic_similarity(user_query, sentence_embeddings[field], transformer_model, faiss_indexes[field], True)
     else:
-        scores = bm25(corpus_index[search_by], user_query, stopwords, idf_values[search_by], avgdl[search_by])
-
-    ranked_docs = sorted(zip(doc_ids, scores), key=lambda x: x[1], reverse=True)[:10]
+        ranked_docs = tokenized_similarity(corpus_index[field], user_query, stopwords, idf_values[field], avgdl[field])
 
     # Format the response with metadata
-    results = []
-    for doc_id, score in ranked_docs:
+    docs_with_meta = []
+    for doc_id, _ in ranked_docs:
         metadata = docs_metadata.get(doc_id, None)  # Get the metadata for the document
         if metadata:
-            results.append({
+            docs_with_meta.append({
                 'doc_id': doc_id,
-                'release_year': metadata['release_year'],
-                'title': metadata['title'],
-                'origin': metadata['origin'],
-                'director': metadata['director'],
-                'cast': metadata['cast'],
-                'genre': metadata['genre'],
-                'url': metadata['url'],
-                'plot': metadata['plot'],
+                'release_year': metadata['release_year'] if pd.notna(metadata['release_year']) else 'unknown',
+                'title': metadata['title'] if pd.notna(metadata['title']) else 'unknown',
+                'origin': metadata['origin'] if pd.notna(metadata['origin']) else 'unknown',
+                'director': metadata['director'] if pd.notna(metadata['director']) else 'unknown',
+                'cast': metadata['cast'] if pd.notna(metadata['cast']) else 'unknown',
+                'genre': metadata['genre'] if pd.notna(metadata['genre']) else 'unknown',
+                'url': metadata['url'] if pd.notna(metadata['url']) else 'unknown',
+                'plot': metadata['plot'] if pd.notna(metadata['plot']) else 'unknown',
+                'evaluation': metadata['evaluation'] if pd.notna(metadata['evaluation']) else 'unknown'
             })
 
 
-    end_time = time.time()  # End timing
-    duration = end_time - start_time
-    print(duration)
     # Return the results
-    return jsonify({'results': results, 'time_needed': duration})
+    return jsonify({'results': docs_with_meta})
+
+@app.route('/judge', methods=['POST'])
+def judge():
+    data = request.get_json()
+
+    user_query = data.get('query')
+    docs_with_eval_meta = data.get('docs_with_eval_meta')
+
+    judged_docs = judge_single_query(user_query, docs_with_eval_meta, api_key)
+
+    return judged_docs
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001)
