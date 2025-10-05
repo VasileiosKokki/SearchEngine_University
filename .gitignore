@@ -1,1 +1,9 @@
 .env
+
+# Ignore FAISS and embedding artifacts
+corpus_index.pkl
+idf_values.pkl
+sentence_embeddings.pkl
+
+# Ignore FAISS bundle directory and its contents
+faiss_bundle/
