@@ -1,1 +1,0 @@
-Run server.py not main.py, its not runnable on its own
